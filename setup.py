@@ -491,8 +491,8 @@ def get_extensions():
             "-stdlib=libc++",
             "-mmacosx-version-min=10.13"
         ])
-        if "OpenMP not found" not in torch.__config__.parallel_info():
-            extra_compile_args["cxx"].append("-fopenmp")
+        # Note: Do not add -fopenmp on macOS as Apple Clang doesn't support it
+        # PyTorch might report OpenMP available, but it uses a different compiler
     elif "OpenMP not found" not in torch.__config__.parallel_info():
         extra_compile_args["cxx"].append("-fopenmp")
 

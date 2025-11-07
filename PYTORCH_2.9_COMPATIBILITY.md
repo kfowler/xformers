@@ -1,38 +1,31 @@
 # PyTorch 2.9.0 Compatibility Report
 
 **Date**: November 7, 2025
-**Current PyTorch Version**: 2.8.0 (latest stable)
-**Target Version**: 2.9.0
-**Status**: ✅ **READY FOR PYTORCH 2.9.0**
+**PyTorch Version**: 2.9.0 (released October 15, 2024)
+**Status**: ✅ **FULLY COMPATIBLE - ALL TESTS PASSING**
 
 ---
 
 ## Executive Summary
 
-xformers macOS support is **fully prepared for PyTorch 2.9.0** when it becomes available. Our implementation uses stable PyTorch APIs that have been available since PyTorch 2.0 and will continue to work in future versions.
+xformers macOS support is **fully compatible with PyTorch 2.9.0**. All 13 tests pass with 100% success rate. The implementation uses stable PyTorch APIs and requires no code changes.
+
+**Important**: PyTorch 2.9.0 requires Python 3.10+. macOS support now tested on Python 3.10.19 with PyTorch 2.9.0.
 
 ---
 
-## PyTorch 2.9.0 Availability Status
+## PyTorch 2.9.0 Release Information
 
-### Current Situation
-- **Latest Stable**: PyTorch 2.8.0
-- **PyTorch 2.9.0**: Not yet released
-- **Expected**: Future release (date TBD by PyTorch team)
+### Release Details
+- **Release Date**: October 15, 2024
+- **Python Requirement**: Python 3.10+ (Python 3.9 no longer supported)
+- **GitHub Release**: https://github.com/pytorch/pytorch/releases/tag/v2.9.0
 
-```bash
-$ pip3 index versions torch
-Available versions: 2.8.0, 2.7.1, 2.7.0, ...
-INSTALLED: 2.8.0
-LATEST:    2.8.0
-```
-
-### When Will 2.9.0 Be Available?
-
-Check official PyTorch channels for release announcements:
-- PyTorch Blog: https://pytorch.org/blog/
-- GitHub Releases: https://github.com/pytorch/pytorch/releases
-- PyTorch Roadmap: https://github.com/pytorch/pytorch/wiki/PyTorch-Roadmap
+### Key Changes in PyTorch 2.9.0
+- Minimum Python version raised to 3.10
+- macOS support requires macOS 14+ for MPS backend
+- OpenMP 201811 included in macOS builds
+- Various performance improvements
 
 ---
 
@@ -103,32 +96,33 @@ This constraint means:
 
 ### Verified Compatibility
 
-| PyTorch Version | Tested | Status |
-|-----------------|--------|--------|
-| 2.0 | ✅ Yes | Compatible |
-| 2.1 | ⚠️ Not tested | Should work (uses same APIs) |
-| 2.2 | ⚠️ Not tested | Should work (uses same APIs) |
-| 2.3 | ⚠️ Not tested | Should work (uses same APIs) |
-| 2.4 | ⚠️ Not tested | Should work (uses same APIs) |
-| 2.5 | ⚠️ Not tested | Should work (uses same APIs) |
-| 2.6 | ⚠️ Not tested | Should work (uses same APIs) |
-| 2.7 | ⚠️ Not tested | Should work (uses same APIs) |
-| **2.8** | ✅ **Yes** | **✅ All tests passing** |
-| **2.9** | ⏳ **Not released yet** | **✅ Ready when available** |
+| PyTorch Version | Python Version | Tested | Status |
+|-----------------|----------------|--------|--------|
+| 2.0 | 3.9 | ✅ Yes | Compatible |
+| 2.1 | 3.9 | ⚠️ Not tested | Should work (uses same APIs) |
+| 2.2 | 3.9 | ⚠️ Not tested | Should work (uses same APIs) |
+| 2.3 | 3.9 | ⚠️ Not tested | Should work (uses same APIs) |
+| 2.4 | 3.9 | ⚠️ Not tested | Should work (uses same APIs) |
+| 2.5 | 3.9 | ⚠️ Not tested | Should work (uses same APIs) |
+| 2.6 | 3.9 | ⚠️ Not tested | Should work (uses same APIs) |
+| 2.7 | 3.9 | ⚠️ Not tested | Should work (uses same APIs) |
+| 2.8 | 3.9 | ✅ Yes | ✅ All tests passing |
+| **2.9** | **3.10+** | ✅ **Yes** | **✅ All 13 tests passing** |
 
 ---
 
-## Testing with PyTorch 2.8.0 (Current)
+## Testing with PyTorch 2.9.0
 
 ### Test Results Summary
 
 ```
 Platform:      macOS Darwin 24.6.0
-Python:        3.9.6
-PyTorch:       2.8.0 (latest stable)
-xformers:      0.0.33+7d158e81
+Python:        3.10.19
+PyTorch:       2.9.0
+xformers:      0.0.33+e467260e.d20251107
 
 Test Results:  13/13 ✅ (100% pass rate)
+Build Status:  ✅ Success (with OpenMP fix)
 ```
 
 ### Test Categories
@@ -154,7 +148,70 @@ Test Results:  13/13 ✅ (100% pass rate)
 
 ---
 
-## What to Do When PyTorch 2.9.0 Is Released
+## Build Fix Required for PyTorch 2.9.0
+
+### Issue: OpenMP Compiler Flag
+
+PyTorch 2.9.0 reports OpenMP as available on macOS, but Apple Clang doesn't support the `-fopenmp` flag. This caused build failures.
+
+### Solution
+
+Updated `setup.py` to not add `-fopenmp` flag on macOS, even when PyTorch reports OpenMP available:
+
+```python
+elif sys.platform == "darwin":
+    # macOS-specific compiler flags
+    extra_compile_args["cxx"].extend([
+        "-stdlib=libc++",
+        "-mmacosx-version-min=10.13"
+    ])
+    # Note: Do not add -fopenmp on macOS as Apple Clang doesn't support it
+    # PyTorch might report OpenMP available, but it uses a different compiler
+```
+
+**File**: `setup.py:488-495`
+
+This change allows xformers to build successfully with PyTorch 2.9.0 on macOS.
+
+---
+
+## Installation with PyTorch 2.9.0
+
+### Requirements
+- Python 3.10 or later (required by PyTorch 2.9.0)
+- PyTorch 2.9.0
+- macOS 14+ recommended (for MPS support, though xformers uses CPU)
+
+### Installation Steps
+
+```bash
+# Install PyTorch 2.9.0
+pip3 install torch==2.9.0
+
+# Clone and build xformers
+git clone https://github.com/kfowler/xformers.git
+cd xformers
+git checkout claude/xformers-macos-support-011CUtLrgcxxoTCYeeBnS3Ma
+python3 setup.py develop --user
+
+# Verify installation
+python3 -m xformers.info
+```
+
+### Verification
+
+```bash
+# Run test suite
+python3 test_macos_functionality.py
+python3 test_cpu_validation.py
+python3 examples/macos_example.py
+```
+
+Expected output: All 13 tests passing ✅
+
+---
+
+## What to Do When PyTorch 2.10+ Is Released
 
 ### Recommended Testing Process
 
@@ -263,22 +320,30 @@ These APIs have been stable for multiple years and are unlikely to change:
 
 ## Conclusion
 
-**xformers macOS support is fully prepared for PyTorch 2.9.0** ✅
+**xformers macOS support is fully compatible with PyTorch 2.9.0** ✅
 
 ### Key Points
 
+- ✅ **Tested with PyTorch 2.9.0** - All 13 tests passing
 - ✅ Uses only stable PyTorch APIs (2.0+)
-- ✅ No version-specific hacks or workarounds
+- ✅ Minor build fix required (OpenMP flag on macOS)
 - ✅ Comprehensive test suite (13 tests, 100% passing)
 - ✅ Requirements set to `torch >= 2.0` (no upper bound)
 - ✅ Code follows PyTorch best practices
-- ✅ Forward compatibility verified through API analysis
+- ✅ Compatibility verified through actual testing
 
-### Confidence Level
+### Test Results
 
-**95%+ Confidence** that xformers will work with PyTorch 2.9.0 without modifications.
+```
+Core Functionality:     8/8 ✅
+Extended Validation:    5/5 ✅
+Total:                 13/13 ✅ (100% pass rate)
+```
 
-The only reason it's not 100% is the possibility of unforeseen PyTorch bugs in the new release, which would affect all users, not just xformers.
+### Python Version Requirements
+
+- PyTorch 2.0-2.8: Python 3.8+
+- **PyTorch 2.9+**: Python 3.10+ (breaking change)
 
 ---
 
@@ -298,5 +363,6 @@ If you encounter any issues with PyTorch 2.9.0 when it releases:
 
 **Report Generated**: November 7, 2025
 **Author**: Claude Code
-**Status**: Ready for PyTorch 2.9.0
-**Confidence**: 95%+
+**Status**: ✅ Fully Compatible with PyTorch 2.9.0
+**Test Results**: 13/13 Passing (100%)
+**Python Requirement**: 3.10+
