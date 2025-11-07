@@ -49,7 +49,7 @@ echo ""
 # Build xformers
 echo "Building xformers (this may take 5-10 minutes)..."
 echo "----------------------------------------"
-pip3 install -v --no-build-isolation -e . 2>&1 | tee build.log
+python3 setup.py develop --user 2>&1 | tee build.log
 
 if [ $? -ne 0 ]; then
     echo ""

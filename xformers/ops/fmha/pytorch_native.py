@@ -30,8 +30,16 @@ class FwOp(AttentionFwOpBase):
     NAME = "pytorch_native_cpu"
 
     @classmethod
+    def is_available(cls) -> bool:
+        """Pure Python implementation using PyTorch native ops, always available"""
+        return True
+
+    @classmethod
     def not_supported_reasons(cls, d: Inputs) -> List[str]:
         reasons = super().not_supported_reasons(d)
+
+        # Remove bfloat16 GPU restriction for CPU - PyTorch native SDPA supports it
+        reasons = [r for r in reasons if "bf16 is only supported on A100+" not in r]
 
         # Check if we're on CPU
         device_type = d.query.device.type
@@ -110,9 +118,12 @@ class FwOp(AttentionFwOpBase):
         if needs_gradient:
             # Create a minimal context for backward pass
             # PyTorch's autograd will handle the actual backward
+            # Create dummy LSE tensor with correct shape [B, H, M] for compatibility
+            B, M, H, K = inp.query.shape
+            lse = torch.zeros((B, H, M), dtype=torch.float32, device=inp.query.device)
             ctx = Context(
                 out=out,
-                lse=None,  # Log-sum-exp not computed for CPU fallback
+                lse=lse,  # Dummy LSE for shape checking, actual backward uses PyTorch autograd
             )
 
         return out, ctx
@@ -131,14 +142,69 @@ class BwOp(AttentionBwOpBase):
     NAME = "pytorch_native_cpu_bw"
 
     @classmethod
+    def is_available(cls) -> bool:
+        """Pure Python implementation using PyTorch native ops, always available"""
+        return True
+
+    @classmethod
     def not_supported_reasons(cls, d: Inputs) -> List[str]:
-        return FwOp.not_supported_reasons(d)
+        # Use same logic as forward operator
+        reasons = FwOp.not_supported_reasons(d)
+        return reasons
 
     @classmethod
     def apply(cls, ctx: Context, inp: Inputs, grad: torch.Tensor) -> "Gradients":
-        # This should not be called directly as PyTorch's autograd handles it
-        # But we define it for compatibility
-        raise NotImplementedError(
-            "CPU backward is handled by PyTorch autograd, "
-            "this should not be called directly"
+        """Compute gradients using PyTorch's autograd"""
+        # The forward pass used F.scaled_dot_product_attention which is differentiable
+        # We need to recompute the forward and get gradients via autograd
+
+        with torch.enable_grad():
+            query = inp.query.detach().requires_grad_(True)
+            key = inp.key.detach().requires_grad_(True)
+            value = inp.value.detach().requires_grad_(True)
+
+            # Recompute forward pass
+            # Handle different input shapes (BMHK)
+            B, M, H, K = query.shape
+            query_t = query.transpose(1, 2)  # (B, H, M, K)
+            key_t = key.transpose(1, 2)
+            value_t = value.transpose(1, 2)
+
+            # Handle attention mask
+            attn_mask = None
+            is_causal = False
+            if isinstance(inp.attn_bias, LowerTriangularMask):
+                is_causal = True
+
+            # Disable dropout in backward pass for deterministic gradients
+            dropout_p = 0.0
+            scale = inp.scale
+
+            out = F.scaled_dot_product_attention(
+                query_t,
+                key_t,
+                value_t,
+                attn_mask=attn_mask,
+                dropout_p=dropout_p,
+                is_causal=is_causal,
+                scale=scale,
+            )
+
+            # Restore original shape
+            out = out.transpose(1, 2)
+
+            # Compute gradients using autograd
+            grad_inputs = torch.autograd.grad(
+                outputs=[out],
+                inputs=[query, key, value],
+                grad_outputs=[grad],
+                retain_graph=False,
+                create_graph=False,
+            )
+
+        from .common import Gradients
+        return Gradients(
+            dq=grad_inputs[0] if inp.query.requires_grad else None,
+            dk=grad_inputs[1] if inp.key.requires_grad else None,
+            dv=grad_inputs[2] if inp.value.requires_grad else None,
         )
