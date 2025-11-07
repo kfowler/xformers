@@ -1,0 +1,28 @@
+#!/bin/bash
+# Quick Test Instructions for macOS
+# Copy and paste these commands on your Mac
+
+echo "=== xformers macOS Quick Start ==="
+echo ""
+echo "Run these commands on your Mac (Terminal):"
+echo ""
+echo "# 1. Install PyTorch"
+echo "pip3 install torch"
+echo ""
+echo "# 2. Clone the repository (if not already done)"
+echo "git clone https://github.com/kfowler/xformers.git"
+echo "cd xformers"
+echo ""
+echo "# 3. Checkout the macOS support branch"
+echo "git checkout claude/xformers-macos-support-011CUtLrgcxxoTCYeeBnS3Ma"
+echo ""
+echo "# 4. Run the automated test"
+echo "./test_macos_build.sh"
+echo ""
+echo "The test will:"
+echo "  - Verify your system"
+echo "  - Build xformers (5-10 minutes)"
+echo "  - Run 8 comprehensive tests"
+echo "  - Report results"
+echo ""
+echo "For manual testing, see MACOS_TESTING.md"
