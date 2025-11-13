@@ -10,7 +10,7 @@ from typing import Any, List, Optional, Sequence, Tuple, Type, TypeVar
 
 import torch
 
-from . import attn_bias, ck, cutlass, flash, flash3, triton_splitk
+from . import attn_bias, ck, cutlass, flash, flash3, pytorch_native, triton_splitk
 from .common import AttentionBwOpBase, AttentionFwOpBase, Inputs
 
 T = TypeVar("T", Type[AttentionFwOpBase], Type[AttentionBwOpBase])
@@ -95,10 +95,18 @@ def _dispatch_fw_priority_list(
                 cutlass.FwOp,
             ]
         )
-    else:
+    elif torch.version.hip:
+        # ROCm/HIP platform
         priority_list_ops = deque(
             [
                 ck.FwOp,
+            ]
+        )
+    else:
+        # CPU fallback (including macOS)
+        priority_list_ops = deque(
+            [
+                pytorch_native.FwOp,
             ]
         )
     if not needs_gradient:
@@ -156,9 +164,15 @@ def _dispatch_bw(
         ]
         if _get_use_fa3():
             priority_list_ops = [flash3.BwOp] + priority_list_ops
-    else:
+    elif torch.version.hip:
+        # ROCm/HIP platform
         priority_list_ops = [
             ck.BwOp,
+        ]
+    else:
+        # CPU fallback (including macOS)
+        priority_list_ops = [
+            pytorch_native.BwOp,
         ]
 
     # NOTE: If we have a variable seqlen `attn_bias`, we need to get a BW pass

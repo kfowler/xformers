@@ -470,12 +470,6 @@ def get_extensions():
         this_dir, "third_party", "cutlass", "tools", "util", "include"
     )
     cutlass_examples_dir = os.path.join(this_dir, "third_party", "cutlass", "examples")
-    if not os.path.exists(cutlass_dir):
-        raise RuntimeError(
-            f"CUTLASS submodule not found at {cutlass_dir}. "
-            "Did you forget to run "
-            "`git submodule update --init --recursive` ?"
-        )
 
     extension = CppExtension
 
@@ -491,6 +485,14 @@ def get_extensions():
         extra_compile_args["cxx"].extend(
             ["/MP", "/Zc:lambda", "/Zc:preprocessor", "/Zc:__cplusplus"]
         )
+    elif sys.platform == "darwin":
+        # macOS-specific compiler flags
+        extra_compile_args["cxx"].extend([
+            "-stdlib=libc++",
+            "-mmacosx-version-min=10.13"
+        ])
+        # Note: Do not add -fopenmp on macOS as Apple Clang doesn't support it
+        # PyTorch might report OpenMP available, but it uses a different compiler
     elif "OpenMP not found" not in torch.__config__.parallel_info():
         extra_compile_args["cxx"].append("-fopenmp")
 
@@ -510,6 +512,14 @@ def get_extensions():
         or os.getenv("FORCE_CUDA", "0") == "1"
         or os.getenv("TORCH_CUDA_ARCH_LIST", "") != ""
     ):
+        # Verify CUTLASS is available for CUDA builds
+        if not os.path.exists(cutlass_dir):
+            raise RuntimeError(
+                f"CUTLASS submodule not found at {cutlass_dir}. "
+                "Did you forget to run "
+                "`git submodule update --init --recursive` ?"
+            )
+
         cuda_version = get_cuda_version(CUDA_HOME)
         extension = CUDAExtension
         sources += source_cuda
